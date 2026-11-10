@@ -1,0 +1,8 @@
+.DS_Store
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.impeccable/review/
+.impeccable/questions/
+.impeccable/mocks/
