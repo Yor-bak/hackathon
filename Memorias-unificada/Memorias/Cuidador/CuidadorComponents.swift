@@ -228,21 +228,49 @@ struct PersonPicker: View {
     @Environment(AppStore.self) private var store
     var showAll = true
 
+    /// Filtros de persona: la fila llega de borde a borde de la pantalla (sale del margen de la página), se
+    /// difumina en los extremos en vez de cortarse en seco y se centra sola en la persona elegida.
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                if showAll {
-                    Chip(title: "Todos", selected: store.selectedPersonID == nil) {
-                        store.selectedPersonID = nil
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    if showAll {
+                        Chip(title: "Todos", selected: store.selectedPersonID == nil) {
+                            store.selectedPersonID = nil
+                        }
+                        .id(Optional<String>.none)
+                    }
+                    ForEach(store.people) { p in
+                        Chip(title: p.name, selected: store.selectedPersonID == p.id) {
+                            store.selectedPersonID = p.id
+                        }
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: 230)          // un nombre larguísimo se abrevia con «…» en vez de salirse de la pantalla
+                        .id(Optional(p.id))
                     }
                 }
-                ForEach(store.people) { p in
-                    Chip(title: p.name, selected: store.selectedPersonID == p.id) {
-                        store.selectedPersonID = p.id
-                    }
-                }
+                .padding(.vertical, 6)
             }
-            .padding(.vertical, 2)
+            // Mismo margen que la página a ambos lados: al reposo se ve igual de alineado que antes.
+            .contentMargins(.horizontal, Theme.screenPadding, for: .scrollContent)
+            .padding(.horizontal, -Theme.screenPadding)
+            .scrollClipDisabled()
+            .mask(
+                // El área de la fila es la de la página (sin los márgenes): la máscara se ensancha esos márgenes para que el
+                // desvanecido ocurra en los últimos 24 pt de la pantalla y los chips en reposo (que empiezan a 24 pt) se vean completos.
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: Theme.screenPadding)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: Theme.screenPadding)
+                }
+                .padding(.horizontal, -Theme.screenPadding)
+            )
+            .onAppear {   // al volver a esta pantalla, la persona ya elegida se muestra completa
+                proxy.scrollTo(Optional(store.selectedPersonID), anchor: .center)
+            }
+            .onChange(of: store.selectedPersonID) { _, id in
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Optional(id), anchor: .center) }
+            }
         }
     }
 }
@@ -328,11 +356,7 @@ struct MedallionTabBar: View {
         .padding(.horizontal, 6)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(alignment: .top) {
-            Theme.background
-                .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 2) }
-                .ignoresSafeArea(edges: .bottom)
-        }
+        .fadingBarBackground(Theme.background)
         .dynamicTypeSize(TypeRange.tabBar)
     }
 }

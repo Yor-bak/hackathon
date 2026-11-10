@@ -122,12 +122,14 @@ struct LibroView: View {
     var body: some View {
         ZStack {
             MemoryTheme.darkBackground.ignoresSafeArea()
-            VStack(spacing: 0) {
-                filterBar
-                PhotoBookView(title: "Mis recuerdos", pages: bookPages, onAdd: { showAdd = true }) { page in
-                    selected = LibroSelectedMemory(id: page.id)
+            GeometryReader { geo in
+                // La tira de película siempre va ARRIBA y centrada; el libro queda centrado debajo y usa el resto del alto.
+                VStack(spacing: 0) {
+                    FilmStrip(titles: [(nil, "Todos")] + decades.map { ($0, "\($0)s") },
+                              selection: decade, vertical: false, maxLength: geo.size.width - 24) { decade = $0 }
+                        .padding(.top, 8)
+                    book
                 }
-                .id(decade)      // al cambiar de temporada el libro vuelve a la portada
             }
         }
         .sheet(isPresented: $showAdd) {
@@ -143,33 +145,11 @@ struct LibroView: View {
         }
     }
 
-    // MARK: Filtros por temporada
-
-    private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                chip("Todos", on: decade == nil) { decade = nil }
-                ForEach(decades, id: \.self) { d in
-                    chip("\(d)s", on: decade == d) { decade = d }
-                }
-            }
-            .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 8)
+    private var book: some View {
+        PhotoBookView(title: "Mis recuerdos", pages: bookPages, onAdd: { showAdd = true }) { page in
+            selected = LibroSelectedMemory(id: page.id)
         }
-        .accessibilityLabel("Filtrar recuerdos por temporada")
-    }
-
-    private func chip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.custom("ArialRoundedMTBold", size: 20, relativeTo: .headline))
-                .foregroundStyle(on ? MemoryTheme.onAccent : .white)
-                .padding(.horizontal, 20).frame(height: 48)
-                .background(Capsule().fill(on ? MemoryTheme.amber : MemoryTheme.darkSurface))
-                .overlay(Capsule().strokeBorder(on ? Color.clear : MemoryTheme.edgeGray, lineWidth: 2))
-        }
-        .buttonStyle(ChunkyPress(edge: on ? MemoryTheme.edgeAmber : MemoryTheme.edgeGray))
-        .padding(.bottom, 5)
-        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        .id(decade)      // al cambiar de temporada el libro vuelve a la portada
     }
 }
 

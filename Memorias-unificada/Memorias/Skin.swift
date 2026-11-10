@@ -25,6 +25,8 @@ enum SkinID: String, CaseIterable, Identifiable {
 private func c(_ hex: UInt32) -> Color { Color(UIColor(hex: hex)) }
 
 enum Skin {
+    /// Alto del desvanecido que sube desde las barras inferiores. Los botones flotantes se colocan por encima de esta franja.
+    static let barFade: CGFloat = 84
     static var current: SkinID = .duo   // único estilo de la app
     static var id: SkinID { current }
 
@@ -301,4 +303,57 @@ struct SkinRule: View {
 
 struct Line: Shape {
     func path(in r: CGRect) -> Path { var p = Path(); p.move(to: CGPoint(x: r.minX, y: r.midY)); p.addLine(to: CGPoint(x: r.maxX, y: r.midY)); return p }
+}
+
+
+// MARK: - Barras que se funden con el fondo (sin bloques sólidos)
+
+/// Alto del desvanecido de la barra inferior. Una pantalla con botones flotantes lo pone en 0 y dibuja su propio desvanecido
+/// DEBAJO de sus botones (el de la barra se dibuja encima del contenido y los apagaría).
+private struct BarFadeKey: EnvironmentKey { static let defaultValue: CGFloat = Skin.barFade }
+extension EnvironmentValues {
+    var barFade: CGFloat {
+        get { self[BarFadeKey.self] }
+        set { self[BarFadeKey.self] = newValue }
+    }
+}
+
+/// Franja que se funde con la barra de abajo; se coloca en el contenido, detrás de los botones flotantes.
+struct BottomFade: View {
+    let color: Color
+    var height: CGFloat = Skin.barFade
+    var body: some View {
+        LinearGradient(stops: [.init(color: color.opacity(0), location: 0), .init(color: color.opacity(0.75), location: 0.55), .init(color: color.opacity(0.9), location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+            .padding(.horizontal, -80).frame(height: height).allowsHitTesting(false)
+    }
+}
+
+private struct FadingBar: ViewModifier {
+    let color: Color
+    @Environment(\.barFade) private var fade
+    func body(content: Content) -> some View {
+        content
+            .background(alignment: .top) {
+                if fade > 0 { BottomFade(color: color, height: fade).offset(y: -fade) }
+            }
+            // Se pasa de los lados a propósito: si algún contenedor recorta o separa unos puntos del borde, el color igual llega al borde del teléfono.
+            .background { color.opacity(0.9).padding(.horizontal, -80).ignoresSafeArea(edges: .bottom).allowsHitTesting(false) }
+    }
+}
+
+extension View {
+    /// Fondo de una barra anclada abajo: semitransparente y con un desvanecido hacia arriba, para que el dibujo de fondo
+    /// (por ejemplo el árbol) no termine en un corte duro. Va detrás del contenido de la barra.
+    func fadingBarBackground(_ color: Color) -> some View { modifier(FadingBar(color: color)) }
+
+    /// Igual, para un encabezado anclado arriba.
+    func fadingHeaderBackground(_ color: Color, fade: CGFloat = 36) -> some View {
+        self
+            .background(alignment: .bottom) {
+                LinearGradient(colors: [color.opacity(0.9), color.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .padding(.horizontal, -80).frame(height: fade).offset(y: fade).allowsHitTesting(false)
+            }
+            .background { color.opacity(0.9).padding(.horizontal, -80).ignoresSafeArea(edges: .top).allowsHitTesting(false) }
+    }
 }

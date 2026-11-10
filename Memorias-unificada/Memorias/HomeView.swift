@@ -37,6 +37,12 @@ struct HomeView: View {
     @State private var pulse = false
 
     var body: some View {
+        // Este lector SÍ respeta la zona segura: así mide cuánto ocupa la barra inferior (+ el indicador de inicio).
+        GeometryReader { outer in dayContent(barInset: outer.safeAreaInsets.bottom) }
+    }
+
+    /// El contenido llega hasta el borde de la pantalla y se desliza por debajo de la barra (translúcida), sin cortarse.
+    private func dayContent(barInset: CGFloat) -> some View {
         GeometryReader { geo in
         let landscape = geo.size.width > geo.size.height
         TimelineView(.periodic(from: .now, by: 60)) { ctx in
@@ -52,13 +58,14 @@ struct HomeView: View {
                 if app.homeMode == .day && Skin.id == .duo { memoBanner(nodes: nodes, current: cur).frame(maxWidth: 640).padding(.horizontal, 16).padding(.top, 2) }
                 if app.homeMode == .calendar {
                     MonthCalendarView()
+                        .contentMargins(.bottom, barInset, for: .scrollContent)
                 } else {
                 if hSize == .regular && landscape {
                     // iPad horizontal: el camino corre a lo ancho, en zigzag arriba y abajo.
                     GeometryReader { g in
                         ScrollViewReader { proxy in
                             ScrollView(.horizontal, showsIndicators: false) {
-                                horizontalPath(nodes: nodes, current: cur, height: g.size.height)
+                                horizontalPath(nodes: nodes, current: cur, height: g.size.height - barInset)
                                     .padding(.horizontal, 24)
                             }
                             .task {
@@ -73,6 +80,8 @@ struct HomeView: View {
                         path(nodes: nodes, current: cur)
                             .padding(.top, 10).padding(.bottom, 40)
                     }
+                    // El camino se desliza POR DEBAJO de la barra inferior (translúcida y con desvanecido): lo último queda por encima de ella.
+                    .contentMargins(.bottom, barInset, for: .scrollContent)
                     .mask(
                         VStack(spacing: 0) {   // desvanecido arriba: ningún texto queda cortado a medias
                             LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 44)
@@ -95,6 +104,7 @@ struct HomeView: View {
             withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) { pulse = true }
         }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     // MARK: Barra superior: Estoy perdido (izq.) y Perfil (der.)
@@ -215,7 +225,8 @@ struct HomeView: View {
 
     /// Versión apaisada del camino: las paradas van de izquierda a derecha, alternando arriba y abajo.
     private func horizontalPath(nodes: [DayNode], current: Int?, height: CGFloat) -> some View {
-        let d = min(circleBase * 1.1, 140)
+        // En pantallas bajas (iPad mini en horizontal) los círculos se achican para que las dos filas quepan sin cortarse.
+        let d = min(min(circleBase * 1.1, 140), max(76, (height - 170) / 1.7))
         let colW = max(250, d + 130)
         let h = max(height, 330)
         let nodeH = d + 150                // círculo + hora y nombre; el nodo se centra como un bloque

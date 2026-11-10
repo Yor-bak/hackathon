@@ -11,23 +11,69 @@ struct FamilyTreeView: View {
     @State private var dragDelta: CGSize = .zero
     @State private var open: OpenMember?
     @State private var showAdd = false
+    /// Zoom del árbol: pellizco o botones «−» y «+». 1 = tamaño normal.
+    @State private var zoom: CGFloat = 1
+    @State private var zoomBase: CGFloat = 1
+    private let zoomRange: ClosedRange<CGFloat> = 0.45 ... 1.8
 
     private let nodeSize: CGFloat = 104
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            GeometryReader { geo in
-                ScrollView([.horizontal, .vertical]) {
-                    canvas(minSize: geo.size)
-                }
-                .scrollIndicators(.hidden)
-                .overlay(alignment: .bottomTrailing) { addButton.padding(18) }
+        GeometryReader { geo in
+            ScrollView([.horizontal, .vertical]) {
+                canvas(minSize: geo.size)
             }
+            .scrollIndicators(.hidden)
+            // En pantallas bajas (iPad mini) el árbol es más alto que la pantalla: se abre mostrando las raíces y la copa se alcanza deslizando.
+            // y centrado de lado a lado: el árbol siempre arranca en el centro de la pantalla.
+            // Pantallas altas (iPad Pro): se abre en el punto donde caben todas las personas, entre el título y la barra.
+            // Pantallas bajas: se abre por las raíces (donde están Carmen y Ramón) y la copa se alcanza deslizando.
+            .defaultScrollAnchor(UnitPoint(x: 0.5, y: geo.size.height >= 840 ? 0.72 : 1))
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { v in zoom = clamp(zoomBase * v.magnification) }
+                    .onEnded { _ in zoomBase = zoom }
+            )
+            // El árbol llega hasta arriba: el encabezado y los controles flotan encima con desvanecido, sin cortar el dibujo.
+            .safeAreaInset(edge: .top, spacing: 0) { header.frame(maxWidth: .infinity).fadingHeaderBackground(Skin.barFill) }
+            // El desvanecido hacia la barra va aquí, DEBAJO de los botones; así los botones quedan pegados abajo, con su color completo.
+            .overlay(alignment: .bottom) { BottomFade(color: Skin.barFill) }
+            .overlay(alignment: .bottom) { controls.padding(.horizontal, 16).padding(.bottom, 14) }
         }
         .background { SkinBackground() }
         .sheet(isPresented: $showAdd) { FamilyAddView(store: store) }
         .fullScreenCover(item: $open) { o in FamilyDetailView(store: store, id: o.id) }
+    }
+
+    private func clamp(_ z: CGFloat) -> CGFloat { min(max(z, zoomRange.lowerBound), zoomRange.upperBound) }
+
+    private func setZoom(_ z: CGFloat) {
+        withAnimation(.easeOut(duration: 0.2)) { zoom = clamp(z); zoomBase = zoom }
+    }
+
+    /// Zoom y «Agregar persona»: botones grandes, porque pellizcar no es obvio para todos.
+    private var controls: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            zoomButton("minus.magnifyingglass", label: "Alejar") { setZoom(zoom / 1.25) }
+                .disabled(zoom <= zoomRange.lowerBound + 0.01)
+            zoomButton("plus.magnifyingglass", label: "Acercar") { setZoom(zoom * 1.25) }
+                .disabled(zoom >= zoomRange.upperBound - 0.01)
+            Spacer(minLength: 8)
+            addButton
+        }
+        .dynamicTypeSize(.xLarge ... .xxxLarge)
+    }
+
+    private func zoomButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 24, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(MemoryTheme.darkSurface))
+                .overlay(Circle().strokeBorder(MemoryTheme.edgeGray, lineWidth: 2))
+        }
+        .buttonStyle(ChunkyPress(edge: MemoryTheme.edgeGray))
+        .accessibilityLabel(label)
     }
 
     // MARK: Encabezado
@@ -48,7 +94,7 @@ struct FamilyTreeView: View {
             Label("Agregar persona", systemImage: "plus")
                 .font(.headline.weight(.heavy))
                 .foregroundStyle(Pal.onInk)
-                .padding(.horizontal, 20).frame(height: 60)
+                .padding(.horizontal, 16).frame(height: 56)
                 .background(Capsule().fill(Skin.accent))
         }
         .buttonStyle(ChunkyPress(edge: MemoryTheme.edgeAmber))
@@ -88,8 +134,17 @@ struct FamilyTreeView: View {
     private func canvas(minSize: CGSize) -> some View {
         let maxX = store.members.map(\.x).max() ?? 0
         let maxY = store.members.map(\.y).max() ?? 0
-        let size = CGSize(width: max(minSize.width, maxX + 140), height: max(minSize.height, maxY + 190, 1100))
-        return ZStack(alignment: .topLeading) {
+        // «Mundo» del árbol: ancho propio (no el de la pantalla), para poder centrarlo; el dibujo de fondo y las personas comparten su centro.
+        let size = CGSize(width: max(840, maxX + 250), height: max(minSize.height, maxY + 190, 1100))
+        return world(size: size)
+            .scaleEffect(zoom, anchor: .topLeading)
+            .frame(width: size.width * zoom, height: size.height * zoom, alignment: .topLeading)
+            .padding(.top, 150)                       // deja libre la franja del encabezado: la persona de más arriba no queda debajo del título
+            .frame(minWidth: minSize.width)           // más angosto que la pantalla: queda centrado; más ancho: se desliza
+    }
+
+    private func world(size: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
             // Silueta del árbol: raíces abajo (los abuelos) y copa arriba (los nietos).
             if let ui = UIImage.bundled("arbol.png") {
                 let w: CGFloat = 860, h = w * ui.size.height / ui.size.width

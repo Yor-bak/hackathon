@@ -31,6 +31,7 @@ private struct CuidadorTabs: View {
         .background(Theme.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedallionTabBar()
+                .environment(\.barFade, store.selectedTab == .familia ? 0 : Skin.barFade)
                 .overlay(alignment: .top) {
                     UndoBanner()
                         .alignmentGuide(.top) { $0[.bottom] + 14 }

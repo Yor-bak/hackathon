@@ -135,16 +135,17 @@ struct RootView: View {
     @EnvironmentObject var app: AppState
 
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                switch app.section {
-                case .none: HomeView()
-                case .familia: FamilyTreeView(store: app.family)
-                case .recuerdos: LibroView()   // libro de fotos 3D (antes: RecuerdosView(startAt: app.albumStart))
-                }
+        Group {
+            switch app.section {
+            case .none: HomeView()
+            case .familia: FamilyTreeView(store: app.family)
+            case .recuerdos: LibroView()   // libro de fotos 3D (antes: RecuerdosView(startAt: app.albumStart))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            MainTabBar()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // La barra flota sobre el contenido (safeAreaInset): lo que hay detrás se ve a través de su desvanecido.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            MainTabBar().environment(\.barFade, app.section == .familia ? 0 : Skin.barFade)   // «Mi familia» dibuja su propio desvanecido bajo sus botones
         }
         .background { SkinBackground() }
         .overlay(alignment: .bottom) { ToastBar().padding(.horizontal, 16).padding(.bottom, 96) }
@@ -170,8 +171,7 @@ struct MainTabBar: View {
             item("Mis recuerdos", icon: .book, section: .recuerdos, seed: 8)
         }
         .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 0)
-        .background(Rectangle().fill(Skin.barFill).ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { SkinRule(seed: 2).offset(y: -4) }
+        .fadingBarBackground(Skin.barFill)
         .dynamicTypeSize(.xLarge ... .xxLarge)       // 4 etiquetas en una fila: tope más bajo
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7), value: app.section)
     }

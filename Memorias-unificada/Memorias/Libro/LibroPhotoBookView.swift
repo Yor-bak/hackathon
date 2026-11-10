@@ -74,16 +74,44 @@ struct PhotoBookView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let available = geo.size.width - 2 * (sideButtonSize + 12) - 24
-            let pageH = min(geo.size.height * 0.66, available / 2 / 0.78)
-            let pageW = pageH * 0.78
+            // Pantalla angosta (iPhone vertical): las flechas pasan a la fila de abajo y el libro usa todo el ancho.
+            let narrow = geo.size.width < 600
+            let sideSpace = narrow ? 0 : 2 * (sideButtonSize + 12)
+            let available = geo.size.width - sideSpace - (narrow ? 16 : 24)
+            // Pantallas bajas (iPad mini en horizontal): menos espacio fijo para que el libro y los botones quepan.
+            let compact = geo.size.height < 600
+            // Páginas más altas y angostas en teléfono vertical: el libro abierto (dos páginas) es más grande sin salirse del ancho.
+            let aspect: CGFloat = narrow ? 0.62 : 0.78
+            let pageH = min(compact ? geo.size.height - 130 : geo.size.height - 200, available / 2 / aspect)
+            let pageW = pageH * aspect
 
-            VStack(spacing: 20) {
-                header
+            VStack(spacing: compact ? 8 : 20) {
+                if compact {
+                    // Una sola línea si cabe; si no (teléfono), título y datos en dos líneas centradas, sin partir el texto.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            Text(title).font(.custom("ArialRoundedMTBold", size: 26, relativeTo: .title)).foregroundStyle(.white)
+                            Text("· \(pages.filter { !$0.isCover }.count) recuerdos · \(pageLabel)")
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(Color(red: 0xB9/255, green: 0xC6/255, blue: 0xD8/255))
+                                .lineLimit(1)
+                        }
+                        VStack(spacing: 2) {
+                            Text(title).font(.custom("ArialRoundedMTBold", size: 26, relativeTo: .title)).foregroundStyle(.white)
+                            Text("\(pages.filter { !$0.isCover }.count) recuerdos · \(pageLabel)")
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(Color(red: 0xB9/255, green: 0xC6/255, blue: 0xD8/255))
+                        }
+                    }
+                } else {
+                    header
+                }
 
                 HStack(spacing: 12) {
+                    if !narrow {
                     roundButton("chevron.left", disabled: progress <= 0.01) {
                         goTo(Int(progress.rounded()) - 1)
+                    }
                     }
                     ZStack {
                         ForEach(0..<leafCount, id: \.self) { i in
@@ -95,14 +123,16 @@ struct PhotoBookView: View {
                     .offset(x: centeringOffset(pageW: pageW))
                     .contentShape(Rectangle())
                     .gesture(dragGesture(pageW: pageW))
+                    if !narrow {
                     roundButton("chevron.right", disabled: progress >= Double(leafCount) - 0.01) {
                         goTo(Int(progress.rounded()) + 1)
                     }
+                    }
                 }
 
-                actions
+                actions(narrow: narrow)
             }
-            .padding(.vertical, 20)
+            .padding(.vertical, compact ? 8 : 20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -121,8 +151,11 @@ struct PhotoBookView: View {
     }
 
     /// Botones inferiores: compartir y agregar.
-    private var actions: some View {
-        HStack(spacing: 16) {
+    private func actions(narrow: Bool) -> some View {
+        HStack(spacing: narrow ? 12 : 16) {
+            if narrow {
+                roundButton("chevron.left", disabled: progress <= 0.01) { goTo(Int(progress.rounded()) - 1) }
+            }
             ShareLink(item: "Mis recuerdos: \(title)") {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 22, weight: .bold))
@@ -142,6 +175,9 @@ struct PhotoBookView: View {
             }
             .buttonStyle(ChunkyPress(edge: MemoryTheme.edgeAmber))
             .accessibilityLabel("Agregar un recuerdo")
+            if narrow {
+                roundButton("chevron.right", disabled: progress >= Double(leafCount) - 0.01) { goTo(Int(progress.rounded()) + 1) }
+            }
         }
     }
 
